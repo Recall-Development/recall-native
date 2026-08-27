@@ -23,12 +23,26 @@ jobs:
       - name: Android-Projekt erzeugen
         run: |
           flutter create --platforms=android --org de.recalldevelopment --project-name recall_native .
-          flutter pub get
 
-      - name: Paketname setzen
+      - name: RECALL Quellcode entpacken
         run: |
-          sed -i 's/com.example.recall_native/de.recalldevelopment.recall_native/g' android/app/build.gradle.kts || true
-          sed -i 's/com.example.recall_native/de.recalldevelopment.recall_native/g' android/app/build.gradle || true
+          rm -rf lib
+          mkdir -p lib
+          unzip -o lib.zip -d lib_source
+
+          if [ -f "lib_source/lib/main.dart" ]; then
+            cp -R lib_source/lib/* lib/
+          else
+            cp -R lib_source/* lib/
+          fi
+
+          echo "Inhalt von lib:"
+          find lib -maxdepth 3 -type f
+
+          test -f lib/main.dart
+
+      - name: Abhängigkeiten installieren
+        run: flutter pub get
 
       - name: APK bauen
         run: flutter build apk --debug
