@@ -1,0 +1,6 @@
+1. Neues GitHub-Repository: recall-native
+2. ZIP entpacken.
+3. Inhalte hochladen (inkl. .github).
+4. Actions > Build RECALL Native APK.
+5. Artifact RECALL-Native-Test-APK herunterladen.
+6. APK installieren und testen.
