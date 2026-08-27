@@ -1,4 +1,4 @@
-name: Build RECALL Release APK
+name: Build RECALL Install Test
 
 on:
   push:
@@ -20,9 +20,9 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Android-Projekt erzeugen
+      - name: Android-Projekt neu erzeugen
         run: |
-          flutter create --platforms=android --org de.recalldevelopment --project-name recall_native .
+          flutter create --platforms=android --org de.recalldevelopment --project-name recall_native2 .
 
       - name: RECALL Quellcode entpacken
         run: |
@@ -36,19 +36,16 @@ jobs:
             cp -R lib_source/* lib/
           fi
 
-          echo "RECALL-Dateien:"
-          find lib -maxdepth 3 -type f
-
           test -f lib/main.dart
 
       - name: Abhängigkeiten installieren
         run: flutter pub get
 
-      - name: Release APK bauen
+      - name: APK bauen
         run: flutter build apk --release
 
-      - name: RECALL Release APK bereitstellen
+      - name: RECALL APK bereitstellen
         uses: actions/upload-artifact@v4
         with:
-          name: RECALL-Release-APK
+          name: RECALL-Install-Test
           path: build/app/outputs/flutter-apk/app-release.apk
