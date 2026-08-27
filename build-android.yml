@@ -1,0 +1,30 @@
+name: Build RECALL Native APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Flutter einrichten
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Flutter-Projekt vervollständigen
+        run: |
+          flutter create --platforms=android --org de.recalldevelopment --project-name recall_native .
+          flutter pub get
+      - name: Paketname setzen
+        run: |
+          sed -i 's/de.recalldevelopment.recall_native/de.recalldevelopment.recall/g' android/app/build.gradle.kts || true
+          sed -i 's/de.recalldevelopment.recall_native/de.recalldevelopment.recall/g' android/app/src/main/AndroidManifest.xml || true
+      - name: APK bauen
+        run: flutter build apk --debug
+      - name: APK hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: RECALL-Native-Test-APK
+          path: build/app/outputs/flutter-apk/app-debug.apk
