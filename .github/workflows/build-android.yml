@@ -1,4 +1,4 @@
-name: Build RECALL Native APK
+name: Build RECALL Release APK
 
 on:
   push:
@@ -36,7 +36,7 @@ jobs:
             cp -R lib_source/* lib/
           fi
 
-          echo "Inhalt von lib:"
+          echo "RECALL-Dateien:"
           find lib -maxdepth 3 -type f
 
           test -f lib/main.dart
@@ -44,11 +44,11 @@ jobs:
       - name: Abhängigkeiten installieren
         run: flutter pub get
 
-      - name: APK bauen
-        run: flutter build apk --debug
+      - name: Release APK bauen
+        run: flutter build apk --release
 
-      - name: RECALL APK bereitstellen
+      - name: RECALL Release APK bereitstellen
         uses: actions/upload-artifact@v4
         with:
-          name: RECALL-Native-Test-APK
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: RECALL-Release-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
