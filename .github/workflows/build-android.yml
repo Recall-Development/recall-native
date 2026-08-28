@@ -64,7 +64,11 @@ jobs:
 
           echo "=== RECALL Dart Dateien ==="
           find lib -maxdepth 4 -type f -print
-
+      - name: Flutter Oberfläche auf MEMVEXA umstellen
+        run: |
+          find lib -type f -name "*.dart" -exec sed -i 's/RECALL/MEMVEXA/g' {} +
+          echo "=== MEMVEXA Rebranding abgeschlossen ==="
+          grep -R "MEMVEXA" lib || true
       - name: Android Konfiguration festlegen
         run: |
           python3 <<'PY'
