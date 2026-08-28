@@ -1,4 +1,4 @@
-name: Build RECALL Universal Android
+name: Build and Test RECALL Android
 
 on:
   push:
@@ -8,10 +8,11 @@ on:
 
 jobs:
   build:
+    name: Build Universal APK + AAB
     runs-on: ubuntu-latest
 
     steps:
-      - name: Code herunterladen
+      - name: Repository auschecken
         uses: actions/checkout@v4
 
       - name: Java 17 einrichten
@@ -20,13 +21,16 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Flutter einrichten
+      - name: Flutter Stable einrichten
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Android-Projekt vollständig erzeugen
+      - name: Flutter Version anzeigen
+        run: flutter --version
+
+      - name: Android-Projekt sauber erzeugen
         run: |
           flutter create \
             --platforms=android \
@@ -34,126 +38,186 @@ jobs:
             --project-name recall_native \
             .
 
-      - name: RECALL-Quellcode aus lib.zip einsetzen
+      - name: RECALL Quellcode vorbereiten
         run: |
-          rm -rf lib
           rm -rf lib_source
-          mkdir -p lib
           mkdir -p lib_source
+
+          test -f lib.zip
 
           unzip -o lib.zip -d lib_source
 
-          if [ -f "lib_source/lib/main.dart" ]; then
-            cp -R lib_source/lib/* lib/
-          else
-            cp -R lib_source/* lib/
-          fi
+          rm -rf lib
+          mkdir -p lib
 
-          echo "=== RECALL Dateien ==="
-          find lib -maxdepth 4 -type f
+          if [ -f "lib_source/lib/main.dart" ]; then
+            cp -R lib_source/lib/. lib/
+          elif [ -f "lib_source/main.dart" ]; then
+            cp -R lib_source/. lib/
+          else
+            echo "FEHLER: main.dart wurde in lib.zip nicht gefunden"
+            find lib_source -maxdepth 4 -type f
+            exit 1
+          fi
 
           test -f lib/main.dart
 
-      - name: Android Mindestversion setzen
+          echo "=== RECALL Dart Dateien ==="
+          find lib -maxdepth 4 -type f -print
+
+      - name: Android Konfiguration festlegen
         run: |
-          python3 - <<'PY'
+          python3 <<'PY'
           from pathlib import Path
+          import re
 
-          files = [
-              Path("android/app/build.gradle.kts"),
-              Path("android/app/build.gradle")
-          ]
+          kts = Path("android/app/build.gradle.kts")
+          groovy = Path("android/app/build.gradle")
 
-          for p in files:
-              if not p.exists():
-                  continue
+          if kts.exists():
+              text = kts.read_text()
 
-              text = p.read_text()
-
-              text = text.replace(
-                  "minSdk = flutter.minSdkVersion",
-                  "minSdk = 21"
+              text = re.sub(
+                  r'namespace\s*=\s*"[^"]+"',
+                  'namespace = "de.recalldevelopment.recall"',
+                  text
               )
 
-              text = text.replace(
-                  "minSdkVersion flutter.minSdkVersion",
-                  "minSdkVersion 21"
+              text = re.sub(
+                  r'applicationId\s*=\s*"[^"]+"',
+                  'applicationId = "de.recalldevelopment.recall"',
+                  text
               )
 
-              text = text.replace(
-                  "applicationId = \"de.recalldevelopment.recall_native\"",
-                  "applicationId = \"de.recalldevelopment.recall\""
+              text = re.sub(
+                  r'minSdk\s*=\s*[^\n]+',
+                  'minSdk = 24',
+                  text
               )
 
-              text = text.replace(
-                  "applicationId \"de.recalldevelopment.recall_native\"",
-                  "applicationId \"de.recalldevelopment.recall\""
+              kts.write_text(text)
+
+          elif groovy.exists():
+              text = groovy.read_text()
+
+              text = re.sub(
+                  r'namespace\s+["\'][^"\']+["\']',
+                  'namespace "de.recalldevelopment.recall"',
+                  text
               )
 
-              p.write_text(text)
+              text = re.sub(
+                  r'applicationId\s+["\'][^"\']+["\']',
+                  'applicationId "de.recalldevelopment.recall"',
+                  text
+              )
 
+              text = re.sub(
+                  r'minSdkVersion\s+[^\n]+',
+                  'minSdkVersion 24',
+                  text
+              )
+
+              groovy.write_text(text)
+
+          else:
+              raise SystemExit("Keine Android Gradle App-Konfiguration gefunden.")
           PY
 
-      - name: Internet-Hardware-Abhängigkeiten vermeiden
+      - name: MainActivity Paket korrigieren
         run: |
-          python3 - <<'PY'
+          rm -rf android/app/src/main/kotlin/com
+          rm -rf android/app/src/main/kotlin/de
+
+          mkdir -p android/app/src/main/kotlin/de/recalldevelopment/recall
+
+          cat > android/app/src/main/kotlin/de/recalldevelopment/recall/MainActivity.kt <<'EOF'
+          package de.recalldevelopment.recall
+
+          import io.flutter.embedding.android.FlutterActivity
+
+          class MainActivity : FlutterActivity()
+          EOF
+
+      - name: Manifest prüfen und App-Namen setzen
+        run: |
+          python3 <<'PY'
           from pathlib import Path
 
-          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          text = p.read_text()
 
-          if manifest.exists():
-              text = manifest.read_text()
+          text = text.replace(
+              'android:label="recall_native"',
+              'android:label="RECALL"'
+          )
 
-              text = text.replace(
-                  "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">",
-                  """<manifest xmlns:android="http://schemas.android.com/apk/res/android">"""
-              )
+          text = text.replace(
+              'android:label="recall_native2"',
+              'android:label="RECALL"'
+          )
 
-              manifest.write_text(text)
+          p.write_text(text)
           PY
 
-      - name: Flutter-Abhängigkeiten installieren
+          cat android/app/src/main/AndroidManifest.xml
+
+      - name: Flutter Dependencies installieren
         run: |
           flutter clean
           flutter pub get
 
-      - name: Flutter analysieren
-        run: |
-          flutter analyze || true
+      - name: Dart Analyse
+        run: flutter analyze
 
       - name: Universal Release APK bauen
         run: |
-          flutter build apk --release
+          flutter build apk \
+            --release \
+            --build-name=1.0.0 \
+            --build-number=1
 
-      - name: ABI-spezifische APKs zusätzlich bauen
+      - name: ABI APKs bauen
         run: |
-          flutter build apk --release --split-per-abi
+          flutter build apk \
+            --release \
+            --split-per-abi \
+            --build-name=1.0.0 \
+            --build-number=1
 
-      - name: APK-Dateien prüfen
+      - name: Play Store AAB bauen
         run: |
-          echo "=== Erzeugte APKs ==="
-          find build/app/outputs/flutter-apk -type f -name "*.apk" -print
+          flutter build appbundle \
+            --release \
+            --build-name=1.0.0 \
+            --build-number=1
 
-          test -f build/app/outputs/flutter-apk/app-release.apk
-
-          ls -lh build/app/outputs/flutter-apk/
-
-      - name: Android Build Tools bereitstellen
+      - name: Build Tools in PATH
         run: |
-          echo "$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)" >> $GITHUB_PATH
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          echo "$ANDROID_HOME/build-tools/$BUILD_TOOLS" >> "$GITHUB_PATH"
 
-      - name: Universal APK Signatur prüfen
+      - name: APK Signatur verifizieren
         run: |
           apksigner verify \
             --verbose \
             --print-certs \
             build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Universal APK Informationen anzeigen
+      - name: APK Paketdaten prüfen
         run: |
           aapt dump badging \
-            build/app/outputs/flutter-apk/app-release.apk \
-            | head -80
+            build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Flutter Libraries prüfen
+        run: |
+          unzip -l build/app/outputs/flutter-apk/app-release.apk \
+            | grep -E "lib/(armeabi-v7a|arm64-v8a|x86_64)/libflutter.so"
+
+      - name: APK Dateien anzeigen
+        run: |
+          ls -lh build/app/outputs/flutter-apk/
+          ls -lh build/app/outputs/bundle/release/
 
       - name: SHA256 erzeugen
         run: |
@@ -161,7 +225,7 @@ jobs:
             build/app/outputs/flutter-apk/app-release.apk \
             > build/app/outputs/flutter-apk/app-release.apk.sha256
 
-      - name: Universal APK bereitstellen
+      - name: Universal APK hochladen
         uses: actions/upload-artifact@v4
         with:
           name: RECALL-Universal-APK
@@ -169,11 +233,83 @@ jobs:
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/flutter-apk/app-release.apk.sha256
 
-      - name: Geräteoptimierte APKs bereitstellen
+      - name: Architektur APKs hochladen
         uses: actions/upload-artifact@v4
         with:
-          name: RECALL-ABI-APKs
+          name: RECALL-Architecture-APKs
           path: |
             build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             build/app/outputs/flutter-apk/app-x86_64-release.apk
+
+      - name: AAB hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: RECALL-PlayStore-AAB
+          path: build/app/outputs/bundle/release/app-release.aab
+
+
+  install-test-android-24:
+    name: Install Test Android 7
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: RECALL-Universal-APK
+          path: apk
+
+      - name: Android APK Install Test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 24
+          arch: x86_64
+          profile: pixel
+          script: |
+            adb install -r apk/app-release.apk
+            adb shell pm list packages | grep de.recalldevelopment.recall
+
+
+  install-test-android-29:
+    name: Install Test Android 10
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: RECALL-Universal-APK
+          path: apk
+
+      - name: Android APK Install Test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          profile: pixel
+          script: |
+            adb install -r apk/app-release.apk
+            adb shell pm list packages | grep de.recalldevelopment.recall
+
+
+  install-test-android-34:
+    name: Install Test Android 14
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: RECALL-Universal-APK
+          path: apk
+
+      - name: Android APK Install Test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            adb install -r apk/app-release.apk
+            adb shell pm list packages | grep de.recalldevelopment.recall
