@@ -43,6 +43,18 @@ jobs:
 
       - name: Prepare Android + widget
         run: python3 scripts/prepare_android.py
+      - name: Fix Flutter 3.44 AGP 9 compatibility
+        run: |
+          sed -i '/id("kotlin-android")/d' android/app/build.gradle.kts
+          sed -i '/kotlinOptions { jvmTarget = JavaVersion.VERSION_17.toString() }/d' android/app/build.gradle.kts
+          cat >> android/app/build.gradle.kts <<'EOF'
+
+          kotlin {
+              compilerOptions {
+                  jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+              }
+          }
+          EOF
 
       - name: Create launcher icons
         run: |
