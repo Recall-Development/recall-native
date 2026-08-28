@@ -138,7 +138,22 @@ jobs:
 
           class MainActivity : FlutterActivity()
           EOF
+      - name: MEMVEXA App-Icon erzeugen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
 
+          mkdir -p android/app/src/main/res/mipmap-mdpi
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/mipmap-xhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+
+          convert memvexa.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert memvexa.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert memvexa.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert memvexa.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert memvexa.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
       - name: Manifest prüfen und App-Namen setzen
         run: |
           python3 <<'PY'
@@ -149,12 +164,12 @@ jobs:
 
           text = text.replace(
               'android:label="recall_native"',
-              'android:label="RECALL"'
+              'android:label="MEMVEXA"'
           )
 
           text = text.replace(
               'android:label="recall_native2"',
-              'android:label="RECALL"'
+              'android:label="MEMVEXA"'
           )
 
           p.write_text(text)
