@@ -1,376 +1,102 @@
-name: Build and Test RECALL Android
+name: MEMVEXA Android Release
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'memvexa_project.zip'
+      - '.github/workflows/build-android.yml'
 
 jobs:
   build:
-    name: Build Universal APK + AAB
+    name: Build signed MEMVEXA APK + AAB
     runs-on: ubuntu-latest
 
     steps:
-      - name: Repository auschecken
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Java 17 einrichten
+      - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
-      - name: Flutter Stable einrichten
+      - name: Flutter stable
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Flutter Version anzeigen
-        run: flutter --version
-
-      - name: Android-Projekt sauber erzeugen
+      - name: Create clean Flutter project
         run: |
-          flutter create \
-            --platforms=android \
-            --org de.recalldevelopment \
-            --project-name recall_native \
-            .
+          rm -rf build android lib pubspec.yaml scripts memvexa.png
+          flutter create --platforms=android --org de.recalldevelopment --project-name memvexa .
 
-      - name: RECALL Quellcode vorbereiten
+      - name: Restore MEMVEXA sources
         run: |
-          rm -rf lib_source
-          mkdir -p lib_source
-
-          test -f lib.zip
-
-          unzip -o lib.zip -d lib_source
-
-          rm -rf lib
-          mkdir -p lib
-
-          if [ -f "lib_source/lib/main.dart" ]; then
-            cp -R lib_source/lib/. lib/
-          elif [ -f "lib_source/main.dart" ]; then
-            cp -R lib_source/. lib/
-          else
-            echo "FEHLER: main.dart wurde in lib.zip nicht gefunden"
-            find lib_source -maxdepth 4 -type f
-            exit 1
-          fi
-
+          unzip -oq memvexa_project.zip
           test -f lib/main.dart
+          test -f scripts/prepare_android.py
+          test -f memvexa.png
 
-          echo "=== RECALL Dart Dateien ==="
-          find lib -maxdepth 4 -type f -print
-      - name: Flutter Oberfläche auf MEMVEXA umstellen
+      - name: Prepare Android + widget
+        run: python3 scripts/prepare_android.py
+
+      - name: Create launcher icons
         run: |
-          find lib -type f -name "*.dart" -exec sed -i 's/RECALL/MEMVEXA/g' {} +
-          echo "=== MEMVEXA Rebranding abgeschlossen ==="
-          grep -R "MEMVEXA" lib || true
-      - name: Android Konfiguration festlegen
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-          import re
-
-          kts = Path("android/app/build.gradle.kts")
-          groovy = Path("android/app/build.gradle")
-
-          if kts.exists():
-              text = kts.read_text()
-
-              text = re.sub(
-                  r'namespace\s*=\s*"[^"]+"',
-                  'namespace = "de.recalldevelopment.recall"',
-                  text
-              )
-
-              text = re.sub(
-                  r'applicationId\s*=\s*"[^"]+"',
-                  'applicationId = "de.recalldevelopment.recall"',
-                  text
-              )
-
-              text = re.sub(
-                  r'minSdk\s*=\s*[^\n]+',
-                  'minSdk = 24',
-                  text
-              )
-
-              kts.write_text(text)
-
-          elif groovy.exists():
-              text = groovy.read_text()
-
-              text = re.sub(
-                  r'namespace\s+["\'][^"\']+["\']',
-                  'namespace "de.recalldevelopment.recall"',
-                  text
-              )
-
-              text = re.sub(
-                  r'applicationId\s+["\'][^"\']+["\']',
-                  'applicationId "de.recalldevelopment.recall"',
-                  text
-              )
-
-              text = re.sub(
-                  r'minSdkVersion\s+[^\n]+',
-                  'minSdkVersion 24',
-                  text
-              )
-
-              groovy.write_text(text)
-
-          else:
-              raise SystemExit("Keine Android Gradle App-Konfiguration gefunden.")
-          PY
-
-      - name: MainActivity Paket korrigieren
-        run: |
-          rm -rf android/app/src/main/kotlin/com
-          rm -rf android/app/src/main/kotlin/de
-
-          mkdir -p android/app/src/main/kotlin/de/recalldevelopment/recall
-
-          cat > android/app/src/main/kotlin/de/recalldevelopment/recall/MainActivity.kt <<'EOF'
-          package de.recalldevelopment.recall
-
-          import io.flutter.embedding.android.FlutterActivity
-
-          class MainActivity : FlutterActivity()
-          EOF
-      - name: MEMVEXA App-Icon erzeugen
-        run: |
-          sudo apt-get update
+          sudo apt-get update -qq
           sudo apt-get install -y imagemagick
-
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-          mkdir -p android/app/src/main/res/mipmap-hdpi
-          mkdir -p android/app/src/main/res/mipmap-xhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-
-          convert memvexa.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert memvexa.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert memvexa.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          mkdir -p android/app/src/main/res/mipmap-mdpi android/app/src/main/res/mipmap-hdpi android/app/src/main/res/mipmap-xhdpi android/app/src/main/res/mipmap-xxhdpi android/app/src/main/res/mipmap-xxxhdpi
+          convert memvexa.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert memvexa.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert memvexa.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert memvexa.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert memvexa.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-      - name: Manifest prüfen und App-Namen setzen
+
+      - name: Restore permanent release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MEMVEXA_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.MEMVEXA_KEYSTORE_PASSWORD }}
         run: |
-          python3 <<'PY'
-          from pathlib import Path
+          test -n "$KEYSTORE_BASE64" || (echo "Missing MEMVEXA_KEYSTORE_BASE64 secret" && exit 1)
+          test -n "$KEYSTORE_PASSWORD" || (echo "Missing MEMVEXA_KEYSTORE_PASSWORD secret" && exit 1)
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/memvexa-release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEYSTORE_PASSWORD
+          keyAlias=memvexa
+          storeFile=memvexa-release.jks
+          EOF
 
-          p = Path("android/app/src/main/AndroidManifest.xml")
-          text = p.read_text()
+      - name: Dependencies
+        run: flutter pub get
 
-          text = text.replace(
-              'android:label="recall_native"',
-              'android:label="MEMVEXA"'
-          )
-
-          text = text.replace(
-              'android:label="recall_native2"',
-              'android:label="MEMVEXA"'
-          )
-
-          p.write_text(text)
-          PY
-
-          cat android/app/src/main/AndroidManifest.xml
-
-      - name: Flutter Dependencies installieren
-        run: |
-          flutter clean
-          flutter pub get
-
-      - name: Automatischen Flutter Beispieltest entfernen
-        run: |
-          rm -rf test
-
-      - name: RECALL Quellcode analysieren
+      - name: Analyze
         run: flutter analyze lib
-  
 
-      - name: Universal Release APK bauen
+      - name: Build signed universal APK
+        run: flutter build apk --release --build-name=1.0.0 --build-number=1
+
+      - name: Build signed Play Store AAB
+        run: flutter build appbundle --release --build-name=1.0.0 --build-number=1
+
+      - name: Verify APK signature
         run: |
-          flutter build apk \
-            --release \
-            --build-name=1.0.0 \
-            --build-number=1
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
 
-      - name: ABI APKs bauen
-        run: |
-          flutter build apk \
-            --release \
-            --split-per-abi \
-            --build-name=1.0.0 \
-            --build-number=1
-
-      - name: Play Store AAB bauen
-        run: |
-          flutter build appbundle \
-            --release \
-            --build-name=1.0.0 \
-            --build-number=1
-
-      - name: Build Tools in PATH
-        run: |
-          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
-          echo "$ANDROID_HOME/build-tools/$BUILD_TOOLS" >> "$GITHUB_PATH"
-
-      - name: APK Signatur verifizieren
-        run: |
-          apksigner verify \
-            --verbose \
-            --print-certs \
-            build/app/outputs/flutter-apk/app-release.apk
-
-      - name: APK Paketdaten prüfen
-        run: |
-          aapt dump badging \
-            build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Flutter Libraries prüfen
-        run: |
-          unzip -l build/app/outputs/flutter-apk/app-release.apk \
-            | grep -E "lib/(armeabi-v7a|arm64-v8a|x86_64)/libflutter.so"
-
-      - name: APK Dateien anzeigen
-        run: |
-          ls -lh build/app/outputs/flutter-apk/
-          ls -lh build/app/outputs/bundle/release/
-
-      - name: SHA256 erzeugen
-        run: |
-          sha256sum \
-            build/app/outputs/flutter-apk/app-release.apk \
-            > build/app/outputs/flutter-apk/app-release.apk.sha256
-
-      - name: Universal APK hochladen
+      - name: Upload install APK
         uses: actions/upload-artifact@v4
         with:
-          name: RECALL-Universal-APK
-          path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/flutter-apk/app-release.apk.sha256
+          name: MEMVEXA-INSTALL-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
 
-      - name: Architektur APKs hochladen
+      - name: Upload Play Store AAB
         uses: actions/upload-artifact@v4
         with:
-          name: RECALL-Architecture-APKs
-          path: |
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            build/app/outputs/flutter-apk/app-x86_64-release.apk
-
-      - name: AAB hochladen
-        uses: actions/upload-artifact@v4
-        with:
-          name: RECALL-PlayStore-AAB
+          name: MEMVEXA-PLAYSTORE-AAB
           path: build/app/outputs/bundle/release/app-release.aab
-
-
-  install-test-android-24:
-    name: Install Test Android 7
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: RECALL-Universal-APK
-          path: apk
-
-      - name: Android APK Install Test
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 24
-          arch: x86_64
-          profile: pixel
-          script: |
-            adb install -r apk/app-release.apk
-            adb shell pm list packages | grep de.recalldevelopment.recall
-
-
-  install-test-android-29:
-    name: Install Test Android 10
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: RECALL-Universal-APK
-          path: apk
-
-      - name: Android APK Install Test
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 29
-          arch: x86_64
-          profile: pixel
-          script: |
-            adb install -r apk/app-release.apk
-            adb shell pm list packages | grep de.recalldevelopment.recall
-
-
-  install-test-android-34:
-    name: Install Test Android 14
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: RECALL-Universal-APK
-          path: apk
-
-      - name: Android APK Install Test
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: x86_64
-          profile: pixel_6
-          script: |
-            adb wait-for-device
-            sleep 30
-            adb shell getprop sys.boot_completed
-            adb shell service check package
-            sleep 10
-            adb install -r apk/app-release.apk
-            adb shell pm list packages | grep de.recalldevelopment.recall
-
-  create-release-keystore:
-    name: Einmaligen MEMVEXA Release Keystore erstellen
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Java 17 einrichten
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: MEMVEXA Keystore erzeugen
-        run: |
-          keytool -genkeypair \
-            -v \
-            -keystore memvexa-release.jks \
-            -storepass "${{ secrets.MEMVEXA_KEYSTORE_PASSWORD }}" \
-            -keypass "${{ secrets.MEMVEXA_KEYSTORE_PASSWORD }}" \
-            -alias memvexa \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=MEMVEXA, OU=Development, O=Recall Development, C=DE"
-
-      - name: Keystore als Artefakt bereitstellen
-        uses: actions/upload-artifact@v4
-        with:
-          name: MEMVEXA-RELEASE-KEYSTORE
-          path: memvexa-release.jks
-          retention-days: 1
-            
+          retention-days: 30
