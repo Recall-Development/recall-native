@@ -316,5 +316,29 @@ jobs:
           arch: x86_64
           profile: pixel_6
           script: |
-            adb install -r apk/app-release.apk
+            adb wait-for-device
+
+            echo "Warte auf vollständigen Android-Start..."
+            until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+            sleep 5
+            done
+
+            echo "Warte auf Package Manager..."
+            until adb shell service check package 2>/dev/null | grep -q "found"; do
+            sleep 5
+            done
+
+            sleep 10
+
+            echo "Installiere RECALL..."
+            for i in 1 2 3; do
+            if adb install -r apk/app-release.apk; then
+            break
+            fi
+            echo "Installationsversuch $i fehlgeschlagen – neuer Versuch..."
+            sleep 10
+            done
+
             adb shell pm list packages | grep de.recalldevelopment.recall
+            
+            
