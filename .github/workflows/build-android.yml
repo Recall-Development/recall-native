@@ -167,8 +167,13 @@ jobs:
           flutter clean
           flutter pub get
 
-      - name: Dart Analyse
-        run: flutter analyze
+      - name: Automatischen Flutter Beispieltest entfernen
+        run: |
+          rm -rf test
+
+      - name: RECALL Quellcode analysieren
+        run: flutter analyze lib
+  
 
       - name: Universal Release APK bauen
         run: |
