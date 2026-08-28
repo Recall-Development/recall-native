@@ -343,11 +343,11 @@ jobs:
             adb install -r apk/app-release.apk
             adb shell pm list packages | grep de.recalldevelopment.recall
 
-              create-release-keystore:
-          name: Einmaligen MEMVEXA Release Keystore erstellen
-          runs-on: ubuntu-latest
-   
-          steps:
+  create-release-keystore:
+    name: Einmaligen MEMVEXA Release Keystore erstellen
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Java 17 einrichten
         uses: actions/setup-java@v4
         with:
@@ -360,7 +360,7 @@ jobs:
             -v \
             -keystore memvexa-release.jks \
             -storepass "${{ secrets.MEMVEXA_KEYSTORE_PASSWORD }}" \
-            -keypass "${{ secrets.MEMVEXA_KEY_PASSWORD }}" \
+            -keypass "${{ secrets.MEMVEXA_KEYSTORE_PASSWORD }}" \
             -alias memvexa \
             -keyalg RSA \
             -keysize 2048 \
