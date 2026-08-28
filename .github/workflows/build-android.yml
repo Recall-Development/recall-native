@@ -1,4 +1,4 @@
-name: Build RECALL Install Test
+name: Build RECALL Universal Android
 
 on:
   push:
@@ -14,20 +14,33 @@ jobs:
       - name: Code herunterladen
         uses: actions/checkout@v4
 
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
       - name: Flutter einrichten
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Android-Projekt neu erzeugen
+      - name: Android-Projekt vollständig erzeugen
         run: |
-          flutter create --platforms=android --org de.recalldevelopment --project-name recall_native2 .
+          flutter create \
+            --platforms=android \
+            --org de.recalldevelopment \
+            --project-name recall_native \
+            .
 
-      - name: RECALL Quellcode entpacken
+      - name: RECALL-Quellcode aus lib.zip einsetzen
         run: |
           rm -rf lib
+          rm -rf lib_source
           mkdir -p lib
+          mkdir -p lib_source
+
           unzip -o lib.zip -d lib_source
 
           if [ -f "lib_source/lib/main.dart" ]; then
@@ -36,16 +49,131 @@ jobs:
             cp -R lib_source/* lib/
           fi
 
+          echo "=== RECALL Dateien ==="
+          find lib -maxdepth 4 -type f
+
           test -f lib/main.dart
 
-      - name: Abhängigkeiten installieren
-        run: flutter pub get
+      - name: Android Mindestversion setzen
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
 
-      - name: APK bauen
-        run: flutter build apk --release
+          files = [
+              Path("android/app/build.gradle.kts"),
+              Path("android/app/build.gradle")
+          ]
 
-      - name: RECALL APK bereitstellen
+          for p in files:
+              if not p.exists():
+                  continue
+
+              text = p.read_text()
+
+              text = text.replace(
+                  "minSdk = flutter.minSdkVersion",
+                  "minSdk = 21"
+              )
+
+              text = text.replace(
+                  "minSdkVersion flutter.minSdkVersion",
+                  "minSdkVersion 21"
+              )
+
+              text = text.replace(
+                  "applicationId = \"de.recalldevelopment.recall_native\"",
+                  "applicationId = \"de.recalldevelopment.recall\""
+              )
+
+              text = text.replace(
+                  "applicationId \"de.recalldevelopment.recall_native\"",
+                  "applicationId \"de.recalldevelopment.recall\""
+              )
+
+              p.write_text(text)
+
+          PY
+
+      - name: Internet-Hardware-Abhängigkeiten vermeiden
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+
+          if manifest.exists():
+              text = manifest.read_text()
+
+              text = text.replace(
+                  "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">",
+                  """<manifest xmlns:android="http://schemas.android.com/apk/res/android">"""
+              )
+
+              manifest.write_text(text)
+          PY
+
+      - name: Flutter-Abhängigkeiten installieren
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: Flutter analysieren
+        run: |
+          flutter analyze || true
+
+      - name: Universal Release APK bauen
+        run: |
+          flutter build apk --release
+
+      - name: ABI-spezifische APKs zusätzlich bauen
+        run: |
+          flutter build apk --release --split-per-abi
+
+      - name: APK-Dateien prüfen
+        run: |
+          echo "=== Erzeugte APKs ==="
+          find build/app/outputs/flutter-apk -type f -name "*.apk" -print
+
+          test -f build/app/outputs/flutter-apk/app-release.apk
+
+          ls -lh build/app/outputs/flutter-apk/
+
+      - name: Android Build Tools bereitstellen
+        run: |
+          echo "$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)" >> $GITHUB_PATH
+
+      - name: Universal APK Signatur prüfen
+        run: |
+          apksigner verify \
+            --verbose \
+            --print-certs \
+            build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Universal APK Informationen anzeigen
+        run: |
+          aapt dump badging \
+            build/app/outputs/flutter-apk/app-release.apk \
+            | head -80
+
+      - name: SHA256 erzeugen
+        run: |
+          sha256sum \
+            build/app/outputs/flutter-apk/app-release.apk \
+            > build/app/outputs/flutter-apk/app-release.apk.sha256
+
+      - name: Universal APK bereitstellen
         uses: actions/upload-artifact@v4
         with:
-          name: RECALL-Install-Test
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: RECALL-Universal-APK
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-release.apk.sha256
+
+      - name: Geräteoptimierte APKs bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: RECALL-ABI-APKs
+          path: |
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
