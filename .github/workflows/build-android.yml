@@ -342,4 +342,35 @@ jobs:
             sleep 10
             adb install -r apk/app-release.apk
             adb shell pm list packages | grep de.recalldevelopment.recall
+
+              create-release-keystore:
+          name: Einmaligen MEMVEXA Release Keystore erstellen
+          runs-on: ubuntu-latest
+   
+          steps:
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: MEMVEXA Keystore erzeugen
+        run: |
+          keytool -genkeypair \
+            -v \
+            -keystore memvexa-release.jks \
+            -storepass "${{ secrets.MEMVEXA_KEYSTORE_PASSWORD }}" \
+            -keypass "${{ secrets.MEMVEXA_KEY_PASSWORD }}" \
+            -alias memvexa \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=MEMVEXA, OU=Development, O=Recall Development, C=DE"
+
+      - name: Keystore als Artefakt bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: MEMVEXA-RELEASE-KEYSTORE
+          path: memvexa-release.jks
+          retention-days: 1
             
