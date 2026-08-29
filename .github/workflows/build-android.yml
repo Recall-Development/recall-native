@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'memvexa_project_NAV_SHORTCUT_FIX.zip'
+      - 'memvexa_project_v1.0.1.zip'
       - '.github/workflows/build-android.yml'
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
 
       - name: Restore MEMVEXA sources
         run: |
-          unzip -oq memvexa_project_NAV_SHORTCUT_FIX.zip
+          unzip -oq memvexa_project_v1.0.1.zip
           test -f lib/main.dart
           test -f scripts/prepare_android.py
           test -f memvexa.png
